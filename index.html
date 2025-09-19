@@ -7,65 +7,63 @@
   <style>
     body { margin: 0; overflow: hidden; background: black; }
     canvas { display: block; }
-    #words {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      color: white;
-      font-family: 'Arial', sans-serif;
-      text-shadow: 2px 2px 8px black;
-      font-size: 20px;
-    }
-    iframe {
-      display: none;
+    iframe { display: none; }
+    .label {
+      color: #fff;
+      font-weight: bold;
+      text-shadow: 0 0 6px #000;
+      white-space: nowrap;
     }
   </style>
 </head>
 <body>
-  <div id="words"></div>
-
   <!-- Música de fondo (Taylor Swift - Enchanted en YouTube) -->
   <iframe width="0" height="0" src="https://www.youtube.com/embed/IGVZOLV9SPo?autoplay=1&loop=1&playlist=IGVZOLV9SPo" frameborder="0" allow="autoplay"></iframe>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/renderers/CSS2DRenderer.js"></script>
   <script>
-    // Escena
+    // Escena y cámara
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    camera.position.z = 10;
+
     const renderer = new THREE.WebGLRenderer({antialias: true});
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Luz
-    const light = new THREE.PointLight(0xffffff, 2, 100);
+    const labelRenderer = new THREE.CSS2DRenderer();
+    labelRenderer.setSize(window.innerWidth, window.innerHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0px';
+    document.body.appendChild(labelRenderer.domElement);
+
+    // Luces
+    const light = new THREE.PointLight(0xffffff, 1.2);
     light.position.set(10, 10, 10);
     scene.add(light);
     scene.add(new THREE.AmbientLight(0x404040));
 
-    // Saturno
+    // Texturas estables de Saturno
     const textureLoader = new THREE.TextureLoader();
-    const saturnTexture = textureLoader.load("https://cdn.jsdelivr.net/gh/ajayns/planet-textures@master/saturn.jpg");
-    const geometry = new THREE.SphereGeometry(2, 64, 64);
-    const material = new THREE.MeshStandardMaterial({map: saturnTexture});
-    const saturn = new THREE.Mesh(geometry, material);
+    const saturnTexture = textureLoader.load("https://planet-textures.s3.amazonaws.com/saturnmap.jpg");
+    const ringTexture = textureLoader.load("https://planet-textures.s3.amazonaws.com/saturnringcolor.jpg");
+
+    // Saturno
+    const saturnGeometry = new THREE.SphereGeometry(2, 64, 64);
+    const saturnMaterial = new THREE.MeshStandardMaterial({map: saturnTexture, color: 0xffffff});
+    const saturn = new THREE.Mesh(saturnGeometry, saturnMaterial);
     scene.add(saturn);
 
-    // Anillos de Saturno
+    // Anillos
     const ringGeometry = new THREE.RingGeometry(2.5, 4, 64);
-    const ringMaterial = new THREE.MeshBasicMaterial({map: textureLoader.load("https://cdn.jsdelivr.net/gh/ajayns/planet-textures@master/saturn_ring_alpha.png"), side: THREE.DoubleSide, transparent: true});
+    const ringMaterial = new THREE.MeshBasicMaterial({map: ringTexture, side: THREE.DoubleSide, transparent: true});
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-    ring.rotation.x = Math.PI / 3;
+    ring.rotation.x = Math.PI / 2.5;
     saturn.add(ring);
 
-    // Control con los dedos (móvil) o mouse
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
-    camera.position.z = 7;
-
-    // Palabras bonitas
+    // Palabras bonitas en 3D
     const palabras = [
       "Te amo", "Mi reina", "Mi universo entero", "Mi princesa hermosa",
       "Eres mi vida", "Mi estrella brillante", "Mi cielo", "Mi tesoro",
@@ -74,41 +72,43 @@
       "Mi alegría", "Mi dulzura", "Mi paz", "Mi esperanza", "Mi futuro"
     ];
 
-    const wordsDiv = document.getElementById("words");
-    const wordElements = palabras.map(p => {
-      const el = document.createElement("div");
-      el.innerText = p;
-      wordsDiv.appendChild(el);
-      return el;
+    const labels = [];
+    const radius = 6;
+
+    palabras.forEach((texto, i) => {
+      const div = document.createElement('div');
+      div.className = 'label';
+      div.textContent = texto;
+      const label = new THREE.CSS2DObject(div);
+
+      const angle = (i / palabras.length) * Math.PI * 2;
+      label.position.set(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
+      saturn.add(label);
+      labels.push(label);
     });
 
-    // Animación de palabras alrededor de Saturno
-    function animateWords() {
-      const time = Date.now() * 0.001;
-      wordElements.forEach((el, i) => {
-        const angle = time + i * (Math.PI * 2 / wordElements.length);
-        const x = (window.innerWidth / 2) + Math.cos(angle) * 200;
-        const y = (window.innerHeight / 2) + Math.sin(angle) * 200;
-        el.style.position = "absolute";
-        el.style.left = x + "px";
-        el.style.top = y + "px";
-      });
-    }
+    // Controles de órbita
+    const controls = new THREE.OrbitControls(camera, labelRenderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 5;
+    controls.maxDistance = 20;
 
     // Animación
     function animate() {
       requestAnimationFrame(animate);
       saturn.rotation.y += 0.002;
-      animateWords();
       controls.update();
       renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
     }
     animate();
 
-    window.addEventListener("resize", () => {
+    window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+      labelRenderer.setSize(window.innerWidth, window.innerHeight);
     });
   </script>
 </body>
